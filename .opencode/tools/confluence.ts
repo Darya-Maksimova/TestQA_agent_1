@@ -2,11 +2,9 @@ import { tool } from "@opencode-ai/plugin"
 
 export default tool({
     description: "Получить страницу Confluence по pageId",
-
     args: {
         pageId: tool.schema.string()
     },
-
     async execute(args) {
         let baseUrl = process.env.CONFLUENCE_URL
         const email = process.env.CONFLUENCE_EMAIL
@@ -21,9 +19,9 @@ export default tool({
 
         const auth = Buffer.from(`${email}:${token}`).toString("base64")
 
-        // Формируем правильный URL
-        const url = `${baseUrl}/wiki/api/v2/pages/${args.pageId}?body-format=storage`
-        console.log("Запрос к Confluence:", url) // Это появится в логах OpenCode
+        // ИСПОЛЬЗУЕМ API v1: /wiki/rest/api/content/ + параметр expand для получения тела страницы
+        const url = `${baseUrl}/wiki/rest/api/content/${args.pageId}?expand=body.storage`
+        console.log("Запрос к Confluence (v1):", url) // Для логов
 
         try {
             const response = await fetch(url, {
@@ -40,7 +38,15 @@ export default tool({
             }
 
             const data = await response.json()
-            return JSON.stringify(data)
+
+            // Достаем именно текст (HTML) из ответа, чтобы отдать его агенту
+            const pageBody = data.body?.storage?.value || "Тело страницы пусто или недоступно"
+            const pageTitle = data.title || "Без названия"
+
+            return JSON.stringify({
+                title: pageTitle,
+                content: pageBody
+            }, null, 2)
 
         } catch (error) {
             throw new Error(`Ошибка при запросе к Confluence: ${error.message}`)
